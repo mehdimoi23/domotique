@@ -1,0 +1,151 @@
+homeassistant:
+  name: Entrées et Mesures
+
+input_number:
+  seuil_temp_max:
+    name: Température max
+    min: 20
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+  seuil_temp_min:
+    name: Température min
+    min: 15
+    max: 28
+    step: 0.5
+    unit_of_measurement: "°C"
+  seuil_hr_max:
+    name: Humidité max
+    min: 40
+    max: 80
+    step: 1
+    unit_of_measurement: "%"
+  seuil_hr_min:
+    name: Humidité min
+    min: 30
+    max: 75
+    step: 1
+    unit_of_measurement: "%"
+
+input_datetime:
+  date_germination:
+    name: Date de germination
+    has_date: true
+    has_time: false
+    icon: mdi:sprout
+
+  date_floraison:
+    name: Début floraison (12/12)
+    has_date: true
+    has_time: false
+    icon: mdi:flower
+
+input_select:
+  priorite_climatique:
+    name: Priorité climatique
+    options:
+      - Humidité
+      - Température
+      - Les deux
+    initial: Les deux
+    
+    
+  semaine_culture:
+    name: Semaine de culture
+    options:
+      - C1  # Croissance semaine 1
+      - C2  # Croissance semaine 2
+      - C3  # Croissance semaine 3
+      - C4  # Croissance semaine 4
+      - C5
+      - C6
+      - F1  # Floraison semaine 1
+      - F2  # Floraison semaine 2
+      - F3  # Floraison semaine 3
+      - F4  # Floraison semaine 4
+      - F5  # Floraison semaine 5
+      - F6  # Floraison semaine 6
+      - F7  # Floraison semaine 7
+      - F8  # Floraison semaine 8
+      - F9  # Floraison semaine 9
+      - F10 # Floraison semaine 10
+      - F11 # Floraison semaine 11
+      - F12 # Floraison semaine 12
+    initial: C1
+    icon: mdi:calendar-week
+
+input_boolean:    
+  mode_floraison:
+    name: Mode Floraison actif
+    icon: mdi:weather-night
+
+
+template:
+  - sensor:
+      - name: "Humidité Moyenne"
+        unique_id: humidite_moyenne
+        unit_of_measurement: "%"
+        state: >
+          {% set h1 = states('sensor.capteur_air_aqara_humidity') | float(default=999) %}
+          {% set h2 = states('sensor.capteur_air_sonoff_humidity') | float(default=999) %}
+          {% set h3 = states('sensor.capteur_air_humidity') | float(default=999) %}
+          {% set valeurs = [h1, h2, h3] | select('lt', 999) | list %}
+          {% if valeurs | length > 0 %}
+            {{ (valeurs | sum / valeurs | length) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "Température Moyenne"
+        unique_id: temperature_moyenne
+        unit_of_measurement: "°C"
+        state: >
+          {% set t1 = states('sensor.capteur_air_aqara_temperature') | float(default=999) %}
+          {% set t2 = states('sensor.capteur_air_sonoff_temperature') | float(default=999) %}
+          {% set t3 = states('sensor.capteur_air_temperature') | float(default=999) %}
+          {% set valeurs = [t1, t2, t3] | select('lt', 999) | list %}
+          {% if valeurs | length > 0 %}
+            {{ (valeurs | sum / valeurs | length) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+          
+      - name: "VPD actuel"
+        unique_id: vpd_actuel
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        device_class: pressure
+        state: >
+          {% set T = states('sensor.temperature_moyenne') | float(0) %}
+          {% set RH = states('sensor.humidite_moyenne') | float(0) %}
+          {% if T > 0 and RH > 0 %}
+            {% set SVP = 0.6108 * (2.71828 ** ((17.27 * T) / (T + 237.3))) %}
+            {{ (SVP * (1 - RH / 100)) | round(2) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "Jours depuis germination"
+        unique_id: jours_depuis_germination
+        unit_of_measurement: "jours"
+        icon: mdi:sprout
+        state: >
+          {% set g = states('input_datetime.date_germination') %}
+          {% if g != 'unknown' and g != '' %}
+            {{ (now().date() - strptime(g, '%Y-%m-%d').date()).days }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "Jours depuis floraison"
+        unique_id: jours_depuis_floraison
+        unit_of_measurement: "jours"
+        icon: mdi:flower
+        state: >
+          {% set f = states('input_datetime.date_floraison') %}
+          {% if f != 'unknown' and f != '' and strptime(f, '%Y-%m-%d').date() <= now().date() %}
+            {{ (now().date() - strptime(f, '%Y-%m-%d').date()).days }}
+          {% else %}
+            0
+          {% endif %}
+    
